@@ -1,6 +1,9 @@
 #include "utils.cuh"
 
-__global__ void naiveGEMM(float *A, float *B, float *C, float alpha, float beta, const int M, const int N, const int K)
+__global__ void naiveGEMM(
+    float *__restrict__ A, float *__restrict__ B, float *__restrict__ C,
+    float alpha, float beta,
+    const int M, const int N, const int K)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -18,7 +21,7 @@ __global__ void naiveGEMM(float *A, float *B, float *C, float alpha, float beta,
 
 int main(void)
 {
-    const int M = 2048;
+    const int M = 1024;
     const int N = 1024;
     const int K = 512;
     float alpha = 1.3;
