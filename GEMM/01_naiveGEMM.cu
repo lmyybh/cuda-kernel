@@ -5,17 +5,17 @@ __global__ void naiveGEMM(
     float alpha, float beta,
     const int M, const int N, const int K)
 {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int i = blockIdx.x * blockDim.x + threadIdx.x; // 列号
+    int j = blockIdx.y * blockDim.y + threadIdx.y; // 行号
 
     if (i < M && j < N)
     {
         float sum = 0.0;
         for (int q = 0; q < K; ++q)
         {
-            sum += A[i * K + q] * B[q * N + j];
+            sum += A[j * K + q] * B[q * N + i];
         }
-        C[i * N + j] = alpha * sum + beta * C[i * N + j];
+        C[j * N + i] = alpha * sum + beta * C[j * N + i];
     }
 }
 
