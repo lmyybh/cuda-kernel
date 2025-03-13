@@ -61,11 +61,8 @@ int main(void)
     // device 计算
     dim3 block(BM, BN);
     dim3 grid((M + BM - 1) / BM, (N + BN - 1) / BN);
-    iStart = cpuSecond();
     naiveGEMM<<<grid, block>>>(d_A, d_B, d_C, alpha, beta, M, N, K);
-    CHECK(cudaDeviceSynchronize());
-    iElaps = cpuSecond() - iStart;
-    printf("naiveGEMM<<<(%d, %d), (%d, %d)>>> elapsed %f sec\n", grid.x, grid.y, block.x, block.y, iElaps);
+    cudaDeviceSynchronize();
 
     // 检查结果
     float *gpuC;
