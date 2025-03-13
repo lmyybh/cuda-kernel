@@ -4,3 +4,5 @@
 !*/
 
 .vscode
+*.ncu-rep
+report/

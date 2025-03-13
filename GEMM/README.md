@@ -69,10 +69,12 @@
 > 
 > Version: Cuda12.8
 
-| 方法      | Global Memory 读取次数               | 运行时间 | 缺陷                             |
-| --------- | ------------------------------------ | -------- | -------------------------------- |
-| naiveGEMM | $2MNK$                               | 1.575 ms | global memory 访问次数多，带宽低 |
-| blockGEMM | $MNK(\frac{1}{B_m} + \frac{1}{B_n})$ | 0.858 ms | 存在 bank conflict               |
+| 方法      | Global Memory 读取次数               | 运行时间  | 缺陷                             |
+| --------- | ------------------------------------ | --------- | -------------------------------- |
+| naiveGEMM | $2MNK$                               | 914.37 us | global memory 访问次数多，带宽低 |
+| blockGEMM | $MNK(\frac{1}{B_m} + \frac{1}{B_n})$ | 200.26 us | 存在 bank conflict               |
+
+> cublas GEMM 运行时间: 127.58 us
 
 
 
