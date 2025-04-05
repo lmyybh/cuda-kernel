@@ -6,9 +6,7 @@
 __global__ void elementwise_add(float* A, float* B, float* C, const int N) {
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-  if (tid < N) {
-    C[tid] = A[tid] + B[tid];
-  }
+  if (tid < N) { C[tid] = A[tid] + B[tid]; }
 }
 
 __global__ void elementwise_add_gsl(float* A, float* B, float* C, const int N) {
@@ -20,9 +18,7 @@ __global__ void elementwise_add_gsl(float* A, float* B, float* C, const int N) {
 __global__ void elementwise_add_vec4(float* A, float* B, float* C, const int N) {
   int index = 4 * (threadIdx.x + blockIdx.x * blockDim.x);
 
-  if (index > N) {
-    return;
-  }
+  if (index > N) { return; }
 
   if (index <= N - 4) {
     float4 a = FLOAT4(A[index]);
@@ -36,9 +32,7 @@ __global__ void elementwise_add_vec4(float* A, float* B, float* C, const int N) 
     FLOAT4(C[index]) = c;
   } else {
 #pragma unroll
-    for (int i = index; i < N; ++i) {
-      C[i] = A[i] + B[i];
-    }
+    for (int i = index; i < N; ++i) { C[i] = A[i] + B[i]; }
   }
 }
 
@@ -58,17 +52,13 @@ __global__ void elementwise_add_vec4_gsl(float* A, float* B, float* C, const int
       FLOAT4(C[i]) = c;
     } else {
 #pragma unroll
-      for (int j = i; j < N; ++j) {
-        C[j] = A[j] + B[j];
-      }
+      for (int j = i; j < N; ++j) { C[j] = A[j] + B[j]; }
     }
   }
 }
 
 void call_add_f32_host(float* A, float* B, float* C, const int N) {
-  for (int i = 0; i < N; ++i) {
-    C[i] = A[i] + B[i];
-  }
+  for (int i = 0; i < N; ++i) { C[i] = A[i] + B[i]; }
 }
 
 void call_add_f32_device(float* d_A, float* d_B, float* d_C, const int N) {

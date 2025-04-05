@@ -3,21 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static const char* _cudaGetErrorEnums(cudaError_t error) {
-  return cudaGetErrorName(error);
-}
+static const char* _cudaGetErrorEnums(cudaError_t error) { return cudaGetErrorName(error); }
 
-template <typename T>
+template<typename T>
 void check(T result, char const* const func, const char* const file, const int line) {
   if (result) {
-    fprintf(
-        stderr,
-        "CUDA error at %s:%d code=%d(%s) \"%s\" \n",
-        file,
-        line,
-        static_cast<unsigned int>(result),
-        _cudaGetErrorEnums(result),
-        func);
+    fprintf(stderr, "CUDA error at %s:%d code=%d(%s) \"%s\" \n", file, line,
+            static_cast<unsigned int>(result), _cudaGetErrorEnums(result), func);
     exit(EXIT_FAILURE);
   }
 }
@@ -30,14 +22,8 @@ inline void __getLastCudaError(const char* errorMessage, const char* file, const
   cudaError_t err = cudaGetLastError();
 
   if (cudaSuccess != err) {
-    fprintf(
-        stderr,
-        "%s(%i) : getLastCudaError() CUDA error : %s : (%d) %s.\n",
-        file,
-        line,
-        errorMessage,
-        static_cast<int>(err),
-        cudaGetErrorString(err));
+    fprintf(stderr, "%s(%i) : getLastCudaError() CUDA error : %s : (%d) %s.\n", file, line,
+            errorMessage, static_cast<int>(err), cudaGetErrorString(err));
     exit(EXIT_FAILURE);
   }
 }

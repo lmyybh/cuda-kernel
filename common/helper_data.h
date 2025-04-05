@@ -5,9 +5,7 @@
 #include <string.h>
 
 void initialRangeData(float* p, const int size, float start, float step) {
-  for (int i = 0; i < size; ++i) {
-    p[i] = start + step * i;
-  }
+  for (int i = 0; i < size; ++i) { p[i] = start + step * i; }
 }
 
 bool checkResult(float* hostRef, float* gpuRef, const int N) {
