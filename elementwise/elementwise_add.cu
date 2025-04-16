@@ -1,7 +1,6 @@
 #include "helper_cuda.cuh"
 
 #define FLOAT4(value) (reinterpret_cast<float4*>(&(value))[0])
-#define BlockSize 256
 
 __global__ void elementwise_add(float* A, float* B, float* C, const int N) {
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -61,22 +60,34 @@ void call_add_f32_host(float* A, float* B, float* C, const int N) {
   for (int i = 0; i < N; ++i) { C[i] = A[i] + B[i]; }
 }
 
-void call_add_f32_device(float* d_A, float* d_B, float* d_C, const int N) {
-  elementwise_add<<<(N + BlockSize - 1) / BlockSize, BlockSize>>>(d_A, d_B, d_C, N);
-}
+void call_add_f32_device(int whichKernel, int blockSize, float* d_A, float* d_B, float* d_C,
+                         const int N) {
+  void (*kernel)(float*, float*, float*, const int);
+  const char* kernelName = "";
+  int gridSize = (N + blockSize - 1) / blockSize;
 
-void call_add_f32_gsl_device(float* d_A, float* d_B, float* d_C, const int N) {
-  // int grid = (N + BlockSize - 1) / BlockSize;
-  int grid = 1;
-  elementwise_add_gsl<<<grid, BlockSize>>>(d_A, d_B, d_C, N);
-}
+  switch (whichKernel) {
+    case 0:
+      kernel = elementwise_add;
+      kernelName = "elementwise_add";
+      break;
+    case 1:
+      kernel = elementwise_add_gsl;
+      kernelName = "elementwise_add_gsl";
+      break;
+    case 2:
+      gridSize = (N + blockSize * 4 - 1) / (blockSize * 4);
+      kernel = elementwise_add_vec4;
+      kernelName = "elementwise_add_vec4";
+      break;
+    case 3:
+      gridSize = (N + blockSize * 4 - 1) / (blockSize * 4);
+      kernel = elementwise_add_vec4_gsl;
+      kernelName = "elementwise_add_vec4_gsl";
+      break;
+    default: break;
+  }
 
-void call_add_f32x4_device(float* d_A, float* d_B, float* d_C, const int N) {
-  elementwise_add_vec4<<<(N + BlockSize * 4 - 1) / (BlockSize * 4), BlockSize>>>(d_A, d_B, d_C, N);
-}
-
-void call_add_f32x4_gsl_device(float* d_A, float* d_B, float* d_C, const int N) {
-  int grid = (N + BlockSize * 4 - 1) / (BlockSize * 4);
-  // int grid = 1;
-  elementwise_add_vec4_gsl<<<grid, BlockSize>>>(d_A, d_B, d_C, N);
+  printf("kernel: [%s], grid: [%d], block: [%d], N: [%d] \n", kernelName, gridSize, blockSize, N);
+  kernel<<<gridSize, blockSize>>>(d_A, d_B, d_C, N);
 }
