@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <iostream>
+#include <string>
 
 void initialRangeData(float* p, const int size, float start, float step) {
   for (int i = 0; i < size; ++i) { p[i] = start + step * i; }
@@ -19,4 +21,12 @@ bool checkResult(float* hostRef, float* gpuRef, const int N) {
   }
 
   return match;
+}
+
+template<typename T>
+void print2D(T* matrix, const int rows, const int cols) {
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < cols; ++j) { std::cout << matrix[i * cols + j] << ","; }
+    std::cout << std::endl;
+  }
 }
