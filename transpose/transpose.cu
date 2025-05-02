@@ -2,7 +2,7 @@
 
 #define CEIL(a, b) ((a + b - 1) / (b))
 
-// 朴素实现：每个 thread 负责一个元素的转置，按行读取，按列写入
+// 朴素实现 NaiveRow：每个 thread 负责一个元素的转置，按行读取，按列写入
 __global__ void transpose_naive_row(float* A, float* B, const int M, const int N) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
   int iy = blockIdx.y * blockDim.y + threadIdx.y;
@@ -10,12 +10,44 @@ __global__ void transpose_naive_row(float* A, float* B, const int M, const int N
   if (iy < M && ix < N) { B[ix * M + iy] = A[iy * N + ix]; }
 }
 
-// 朴素实现：每个 thread 负责一个元素的转置，按列读取，按行写入
+// 朴素实现 NaiveCol：每个 thread 负责一个元素的转置，按列读取，按行写入
 __global__ void transpose_naive_col(float* A, float* B, const int M, const int N) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
   int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
   if (iy < N && ix < M) { B[iy * M + ix] = A[ix * N + iy]; }
+}
+
+// 每个 block 负责一个分块，每个 thread 负责多个元素
+template<int Bn, int Bm>
+__global__ void transpose_naive_row_nelements(float* A, float* B, const int M, const int N) {
+  int iterX = CEIL(Bm, blockDim.x);
+  int iterY = CEIL(Bn, blockDim.y);
+
+#pragma unroll
+  for (int i = 0; i < iterX; ++i) {
+    int c = blockIdx.x * Bm + threadIdx.x + blockDim.x * i;
+#pragma unroll
+    for (int j = 0; j < iterY; ++j) {
+      int r = blockIdx.y * Bn + threadIdx.y + blockDim.y * j;
+
+      if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
+    }
+  }
+}
+
+// block 尺寸为 (8, 32), 每个 block 负责一个 32*32 分块，每个 thread 负责 4 个元素
+__global__ void transpose_naive_row_32(float* A, float* B, const int M, const int N) {
+  int r = blockIdx.y * 32 + threadIdx.y;
+  int c = blockIdx.x * 32 + threadIdx.x;  // + blockDim.x * i;
+
+  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
+  c += blockDim.x;
+  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
+  c += blockDim.x;
+  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
+  c += blockDim.x;
+  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
 }
 
 // 每个 block 负责一个矩阵块的转置，一个 thread 负责一个元素
@@ -131,23 +163,47 @@ void call_transpose_device(int whichKernel, float* A, float* B, const int M, con
       grid = dim3(CEIL(M, block.x), CEIL(N, block.y));
       break;
     case 2:
-      kernel = transpose_tile<Bm, Bn>;
-      kernelName = "transpose_tile";
-      block = dim3(Bn, Bm);
-      grid = dim3(CEIL(N, block.x), CEIL(M, block.y));
+      kernel = transpose_naive_row_nelements<32, 32>;
+      kernelName = "transpose_naive_row_nelements";
+      block = dim3(blockDimX, 256 / blockDimX);
+      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
       break;
     case 3:
-      kernel = transpose_tile_v2<Bm, Bn>;
-      kernelName = "transpose_tile_v2";
-      block = dim3(Bn, Bm / 4);
-      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+      kernel = transpose_naive_row_32;
+      kernelName = "transpose_naive_row_32";
+      block = dim3(8, 32);
+      grid = dim3(CEIL(N, 32), CEIL(M, 32));
       break;
     case 4:
-      kernel = transpose_tile_v3<Bm, Bn>;
+      kernel = transpose_tile_v3<32, 32>;
       kernelName = "transpose_tile_v3";
       block = dim3(8, 32);
-      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+      grid = dim3(CEIL(N, 32), CEIL(M, 32));
       break;
+    // case 2:
+    //   kernel = transpose_tile<Bm, Bn>;
+    //   kernelName = "transpose_tile";
+    //   block = dim3(Bn, Bm);
+    //   grid = dim3(CEIL(N, block.x), CEIL(M, block.y));
+    //   break;
+    // case 3:
+    //   kernel = transpose_tile_v2<Bm, Bn>;
+    //   kernelName = "transpose_tile_v2";
+    //   block = dim3(Bn, Bm / 4);
+    //   grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+    //   break;
+    // case 4:
+    //   kernel = transpose_tile_v3<Bm, Bn>;
+    //   kernelName = "transpose_tile_v3";
+    //   block = dim3(blockDimX, 256 / blockDimX);
+    //   grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+    //   break;
+    // case 5:
+    //   kernel = transpose_naive_row_v2;
+    //   kernelName = "transpose_naive_row_v2";
+    //   block = dim3(blockDimX, 256 / blockDimX);
+    //   grid = dim3(CEIL(N, block.x), CEIL(M, block.y));
+    //   break;
     default: break;
   }
 
