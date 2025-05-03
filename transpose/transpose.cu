@@ -3,7 +3,7 @@
 #define CEIL(a, b) ((a + b - 1) / (b))
 
 // 朴素实现 NaiveRow：每个 thread 负责一个元素的转置，按行读取，按列写入
-__global__ void transpose_naive_row(float* A, float* B, const int M, const int N) {
+__global__ void transposeNaiveRow(float* A, float* B, const int M, const int N) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
   int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -11,127 +11,105 @@ __global__ void transpose_naive_row(float* A, float* B, const int M, const int N
 }
 
 // 朴素实现 NaiveCol：每个 thread 负责一个元素的转置，按列读取，按行写入
-__global__ void transpose_naive_col(float* A, float* B, const int M, const int N) {
+__global__ void transposeNaiveCol(float* A, float* B, const int M, const int N) {
   int ix = blockIdx.x * blockDim.x + threadIdx.x;
   int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
   if (iy < N && ix < M) { B[iy * M + ix] = A[ix * N + iy]; }
 }
 
-// 每个 block 负责一个分块，每个 thread 负责多个元素
-template<int Bn, int Bm>
-__global__ void transpose_naive_row_nelements(float* A, float* B, const int M, const int N) {
-  int iterX = CEIL(Bm, blockDim.x);
-  int iterY = CEIL(Bn, blockDim.y);
-
-#pragma unroll
-  for (int i = 0; i < iterX; ++i) {
-    int c = blockIdx.x * Bm + threadIdx.x + blockDim.x * i;
-#pragma unroll
-    for (int j = 0; j < iterY; ++j) {
-      int r = blockIdx.y * Bn + threadIdx.y + blockDim.y * j;
-
-      if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
-    }
-  }
-}
-
-// block 尺寸为 (8, 32), 每个 block 负责一个 32*32 分块，每个 thread 负责 4 个元素
-__global__ void transpose_naive_row_32(float* A, float* B, const int M, const int N) {
-  int r = blockIdx.y * 32 + threadIdx.y;
-  int c = blockIdx.x * 32 + threadIdx.x;  // + blockDim.x * i;
-
-  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
-  c += blockDim.x;
-  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
-  c += blockDim.x;
-  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
-  c += blockDim.x;
-  if (r < M && c < N) { B[c * M + r] = A[r * N + c]; }
-}
-
-// 每个 block 负责一个矩阵块的转置，一个 thread 负责一个元素
+// 每个 block 负责一个分块 tile，每个 thread 负责多个元素
 template<int Bm, int Bn>
-__global__ void transpose_tile(float* A, float* B, const int M, const int N) {
-  __shared__ float tile[Bm][Bn];
+__global__ void transposeNaiveColNelements(float* A, float* B, const int M, const int N) {
+  // (r0, c0) 表示 tile 内左上角元素的坐标
+  int r0 = blockIdx.x * Bm;
+  int c0 = blockIdx.y * Bn;
 
-  int tx = threadIdx.x, ty = threadIdx.y;
-  int bx = blockIdx.x, by = blockIdx.y;
-
-  int r = by * Bm + ty;
-  int c = bx * Bn + tx;
-
-  if (r < M && c < N) { tile[ty][tx] = A[r * N + c]; }
-
-  __syncthreads();
-
-  r = bx * Bn + ty;
-  c = by * Bm + tx;
-  if (r < N && c < M) { B[r * M + c] = tile[tx][ty]; }
-}
-
-template<int Bm, int Bn>
-__global__ void transpose_tile_v2(float* A, float* B, const int M, const int N) {
-  __shared__ float tile[Bm][Bn];
-
-  int tx = threadIdx.x, ty = threadIdx.y;
-  int bx = blockIdx.x, by = blockIdx.y;
-
-  int iterX = Bn / blockDim.x;
-  int iterY = Bm / blockDim.y;
-
-  for (int i = 0; i < iterY; ++i) {
-    int r = by * Bm + ty + i * blockDim.y;
+  // 循环中的 (x, y) 表示 thread 负责的元素在 tile 内的坐标 (以左上角为 (0, 0))
+  // thread 负责的元素的实际坐标为: (r0 + x, c0 + y)
+#pragma unroll
+  for (int x = threadIdx.x; x < Bm; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
+    int r = r0 + x;
     if (r >= M) break;
-    for (int j = 0; j < iterX; ++j) {
-      int c = bx * Bn + tx + j * blockDim.x;
-      if (c >= N) break;
-      tile[ty + i * blockDim.y][tx + j * blockDim.x] = A[r * N + c];
-    }
-  }
 
-  __syncthreads();
-
-  for (int i = 0; i < iterY; ++i) {
-    int r = bx * Bn + ty + i * blockDim.y;
-    if (r >= N) break;
-    for (int j = 0; j < iterX; ++j) {
-      int c = by * Bm + tx + j * blockDim.x;
-      if (c >= M) break;
-      B[r * M + c] = tile[tx + j * blockDim.x][ty + i * blockDim.y];
+#pragma unroll
+    for (int y = threadIdx.y; y < Bn; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
+      int c = c0 + y;
+      if (c < N) { B[c * M + r] = A[r * N + c]; }
     }
   }
 }
 
 template<int Bm, int Bn>
-__global__ void transpose_tile_v3(float* A, float* B, const int M, const int N) {
+__global__ void transposeShared(float* A, float* B, const int M, const int N) {
+  __shared__ float tile[Bm][Bn];
+
+  /* -------- 读取阶段 -------- */
+  // (r0, c0) 表示 matrixA 在 tile 内左上角元素的坐标
+  int r0 = blockIdx.y * Bm;
+  int c0 = blockIdx.x * Bn;
+
+  // 循环中的 (y, x) 表示 thread 负责读取的 matrixA 元素在 tile 内的坐标 (以左上角为 (0, 0))
+  // thread 负责的 matrixA 元素的实际坐标为: (r0 + y, c0 + x)
+  for (int y = threadIdx.y; y < Bm; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
+    int r = r0 + y;
+    if (r >= M) break;
+
+    for (int x = threadIdx.x; x < Bn; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
+      int c = c0 + x;
+
+      if (c < N) {
+        tile[y][x] = A[r * N + c];  // 目标是将 A[r][c] 写入 tile[y][x]
+      }
+    }
+  }
+
+  __syncthreads();
+
+  /* -------- 转置阶段: warp 按列读取 tile, 按行写入 matrixB -------- */
+  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {
+    int c = c0 + y;
+    if (c >= N) break;
+    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {
+      int r = r0 + x;
+      if (r < M) { B[c * M + r] = tile[x][y]; }  // 目标是将 tile[x][y] 写入 B[c][r]
+    }
+  }
+}
+
+template<int Bm, int Bn>
+__global__ void transposeSharedNoBankConfilictsV1(float* A, float* B, const int M, const int N) {
   __shared__ float tile[Bm][Bn + 1];
 
-  int tx = threadIdx.x, ty = threadIdx.y;
-  int bx = blockIdx.x, by = blockIdx.y;
+  /* -------- 读取阶段: wrap 按行读取 matrixA, 按行写入 tile -------- */
+  // (r0, c0) 表示 matrixA 在 tile 内左上角元素的坐标
+  int r0 = blockIdx.y * Bm;
+  int c0 = blockIdx.x * Bn;
 
-  int iterX = Bn / blockDim.x;
-  int iterY = Bm / blockDim.y;
-
-  for (int i = 0; i < iterY; ++i) {
-    int r = by * Bm + ty + i * blockDim.y;
+  // 循环中的 (y, x) 表示 thread 负责读取的 matrixA 元素在 tile 内的坐标 (以左上角为 (0, 0))
+  // thread 负责的 matrixA 元素的实际坐标为: (r0 + y, c0 + x)
+  for (int y = threadIdx.y; y < Bm; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
+    int r = r0 + y;
     if (r >= M) break;
-    for (int j = 0; j < iterX; ++j) {
-      int c = bx * Bn + tx + j * blockDim.x;
-      if (c >= N) break;
-      tile[ty + i * blockDim.y][tx + j * blockDim.x] = A[r * N + c];
+
+    for (int x = threadIdx.x; x < Bn; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
+      int c = c0 + x;
+
+      if (c < N) {
+        tile[y][x] = A[r * N + c];  // 目标是将 A[r][c] 写入 tile[y][x]
+      }
     }
   }
 
   __syncthreads();
 
-  for (int i = 0; i < iterY; ++i) {
-    int r = bx * Bn + ty + i * blockDim.y;
-    if (r >= N) break;
-    for (int j = 0; j < iterX; ++j) {
-      int c = by * Bm + tx + j * blockDim.x;
-      if (c >= M) break;
-      B[r * M + c] = tile[tx + j * blockDim.x][ty + i * blockDim.y];
+  /* -------- 转置阶段: warp 按列读取 tile, 按行写入 matrixB -------- */
+  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {
+    int c = c0 + y;
+    if (c >= N) break;
+    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {
+      int r = r0 + x;
+      if (r < M) { B[c * M + r] = tile[x][y]; }  // 目标是将 tile[x][y] 写入 B[c][r]
     }
   }
 }
@@ -151,59 +129,35 @@ void call_transpose_device(int whichKernel, float* A, float* B, const int M, con
 
   switch (whichKernel) {
     case 0:
-      kernel = transpose_naive_row;
-      kernelName = "transpose_naive_row";
+      kernel = transposeNaiveRow;
+      kernelName = "transposeNaiveRow";
       block = dim3(blockDimX, 256 / blockDimX);
       grid = dim3(CEIL(N, block.x), CEIL(M, block.y));
       break;
     case 1:
-      kernel = transpose_naive_col;
-      kernelName = "transpose_naive_col";
+      kernel = transposeNaiveCol;
+      kernelName = "transposeNaiveCol";
       block = dim3(blockDimX, 256 / blockDimX);
       grid = dim3(CEIL(M, block.x), CEIL(N, block.y));
       break;
     case 2:
-      kernel = transpose_naive_row_nelements<32, 32>;
-      kernelName = "transpose_naive_row_nelements";
+      kernel = transposeNaiveColNelements<32, 32>;
+      kernelName = "transposeNaiveColNelements";
       block = dim3(blockDimX, 256 / blockDimX);
       grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
       break;
     case 3:
-      kernel = transpose_naive_row_32;
-      kernelName = "transpose_naive_row_32";
-      block = dim3(8, 32);
+      kernel = transposeShared<48, 32>;
+      kernelName = "transposeShared";
+      block = dim3(32, 8);
       grid = dim3(CEIL(N, 32), CEIL(M, 32));
       break;
     case 4:
-      kernel = transpose_tile_v3<32, 32>;
-      kernelName = "transpose_tile_v3";
-      block = dim3(8, 32);
+      kernel = transposeSharedNoBankConfilictsV1<48, 32>;
+      kernelName = "transposeSharedNoBankConfilictsV1";
+      block = dim3(32, 8);
       grid = dim3(CEIL(N, 32), CEIL(M, 32));
       break;
-    // case 2:
-    //   kernel = transpose_tile<Bm, Bn>;
-    //   kernelName = "transpose_tile";
-    //   block = dim3(Bn, Bm);
-    //   grid = dim3(CEIL(N, block.x), CEIL(M, block.y));
-    //   break;
-    // case 3:
-    //   kernel = transpose_tile_v2<Bm, Bn>;
-    //   kernelName = "transpose_tile_v2";
-    //   block = dim3(Bn, Bm / 4);
-    //   grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
-    //   break;
-    // case 4:
-    //   kernel = transpose_tile_v3<Bm, Bn>;
-    //   kernelName = "transpose_tile_v3";
-    //   block = dim3(blockDimX, 256 / blockDimX);
-    //   grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
-    //   break;
-    // case 5:
-    //   kernel = transpose_naive_row_v2;
-    //   kernelName = "transpose_naive_row_v2";
-    //   block = dim3(blockDimX, 256 / blockDimX);
-    //   grid = dim3(CEIL(N, block.x), CEIL(M, block.y));
-    //   break;
     default: break;
   }
 
