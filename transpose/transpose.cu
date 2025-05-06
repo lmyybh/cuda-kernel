@@ -45,71 +45,135 @@ __global__ void transposeShared(float* A, float* B, const int M, const int N) {
   __shared__ float tile[Bm][Bn];
 
   /* -------- 读取阶段 -------- */
-  // (r0, c0) 表示 matrixA 在 tile 内左上角元素的坐标
+  // (r0, c0) 表示 tile 内左上角元素在 matrixA 中的坐标
   int r0 = blockIdx.y * Bm;
   int c0 = blockIdx.x * Bn;
 
-  // 循环中的 (y, x) 表示 thread 负责读取的 matrixA 元素在 tile 内的坐标 (以左上角为 (0, 0))
-  // thread 负责的 matrixA 元素的实际坐标为: (r0 + y, c0 + x)
+  // thread y 方向负责：矩阵 A 的行，shared memory 的行
+  // thread x 方向负责：矩阵 A 的列，shared memory 的列
+  // shared memory 中的元素 tile[y][x] = A[r0 + y, c0 + x]
+#pragma unroll
   for (int y = threadIdx.y; y < Bm; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
     int r = r0 + y;
     if (r >= M) break;
 
+#pragma unroll
     for (int x = threadIdx.x; x < Bn; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
       int c = c0 + x;
-
       if (c < N) {
-        tile[y][x] = A[r * N + c];  // 目标是将 A[r][c] 写入 tile[y][x]
+        tile[y][x] = A[r * N + c];  // 将 A[r0 + y, c0 + x] 写入 tile[y][x]
       }
     }
   }
 
-  __syncthreads();
+  __syncthreads();  // 同步线程块
 
-  /* -------- 转置阶段: warp 按列读取 tile, 按行写入 matrixB -------- */
-  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {
+/* -------- 写入阶段 -------- */
+// (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
+// thread y 方向负责：矩阵 B 的行，shared memory 的列
+// thread x 方向负责：矩阵 B 的列，shared memory 的行
+// shared memory 中的元素 tile[x][y] = B[c0 + y, r0 + x]
+#pragma unroll
+  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
     int c = c0 + y;
     if (c >= N) break;
-    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {
+
+#pragma unroll
+    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
       int r = r0 + x;
-      if (r < M) { B[c * M + r] = tile[x][y]; }  // 目标是将 tile[x][y] 写入 B[c][r]
+      if (r < M) { B[c * M + r] = tile[x][y]; }  // 将 tile[x][y] 写入 B[c0 + y, r0 + x]
     }
   }
 }
 
 template<int Bm, int Bn>
-__global__ void transposeSharedNoBankConfilictsV1(float* A, float* B, const int M, const int N) {
-  __shared__ float tile[Bm][Bn + 1];
+__global__ void transposeSharedPadding(float* A, float* B, const int M, const int N) {
+  __shared__ float tile[Bm][Bn + 1];  // padding
 
-  /* -------- 读取阶段: wrap 按行读取 matrixA, 按行写入 tile -------- */
-  // (r0, c0) 表示 matrixA 在 tile 内左上角元素的坐标
+  /* -------- 读取阶段 -------- */
+  // (r0, c0) 表示 tile 内左上角元素在 matrixA 中的坐标
   int r0 = blockIdx.y * Bm;
   int c0 = blockIdx.x * Bn;
 
-  // 循环中的 (y, x) 表示 thread 负责读取的 matrixA 元素在 tile 内的坐标 (以左上角为 (0, 0))
-  // thread 负责的 matrixA 元素的实际坐标为: (r0 + y, c0 + x)
+  // thread y 方向负责：矩阵 A 的行，shared memory 的行
+  // thread x 方向负责：矩阵 A 的列，shared memory 的列
+  // shared memory 中的元素 tile[y][x] = A[r0 + y, c0 + x]
+#pragma unroll
   for (int y = threadIdx.y; y < Bm; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
     int r = r0 + y;
     if (r >= M) break;
 
+#pragma unroll
     for (int x = threadIdx.x; x < Bn; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
       int c = c0 + x;
-
       if (c < N) {
-        tile[y][x] = A[r * N + c];  // 目标是将 A[r][c] 写入 tile[y][x]
+        tile[y][x] = A[r * N + c];  // 将 A[r0 + y, c0 + x] 写入 tile[y][x]
       }
     }
   }
 
-  __syncthreads();
+  __syncthreads();  // 同步线程块
 
-  /* -------- 转置阶段: warp 按列读取 tile, 按行写入 matrixB -------- */
-  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {
+/* -------- 写入阶段 -------- */
+// (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
+// thread y 方向负责：矩阵 B 的行，shared memory 的列
+// thread x 方向负责：矩阵 B 的列，shared memory 的行
+// shared memory 中的元素 tile[x][y] = B[c0 + y, r0 + x]
+#pragma unroll
+  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
     int c = c0 + y;
     if (c >= N) break;
-    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {
+
+#pragma unroll
+    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
       int r = r0 + x;
-      if (r < M) { B[c * M + r] = tile[x][y]; }  // 目标是将 tile[x][y] 写入 B[c][r]
+      if (r < M) { B[c * M + r] = tile[x][y]; }  // 将 tile[x][y] 写入 B[c0 + y, r0 + x]
+    }
+  }
+}
+
+template<int Bm, int Bn>
+__global__ void transposeSharedSwizzling(float* A, float* B, const int M, const int N) {
+  __shared__ float tile[Bm][Bn];
+
+  /* -------- 读取阶段 -------- */
+  // (r0, c0) 表示 tile 内左上角元素在 matrixA 中的坐标
+  int r0 = blockIdx.y * Bm;
+  int c0 = blockIdx.x * Bn;
+
+  // thread y 方向负责：矩阵 A 的行，shared memory 的行
+  // thread x 方向负责：矩阵 A 的列，shared memory 的列
+  // shared memory 中的元素 tile[y][x] = A[r0 + y, c0 + x]
+#pragma unroll
+  for (int y = threadIdx.y; y < Bm; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
+    int r = r0 + y;
+    if (r >= M) break;
+
+#pragma unroll
+    for (int x = threadIdx.x; x < Bn; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
+      int c = c0 + x;
+      if (c < N) {
+        tile[y][x ^ y] = A[r * N + c];  // 将 A[r0 + y, c0 + x] 写入 tile[y][x ^ y]
+      }
+    }
+  }
+
+  __syncthreads();  // 同步线程块
+
+/* -------- 写入阶段 -------- */
+// (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
+// thread y 方向负责：矩阵 B 的行，shared memory 的列
+// thread x 方向负责：矩阵 B 的列，shared memory 的行
+// shared memory 中的元素 tile[x][y] = B[c0 + y, r0 + x]
+#pragma unroll
+  for (int y = threadIdx.y; y < Bn; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
+    int c = c0 + y;
+    if (c >= N) break;
+
+#pragma unroll
+    for (int x = threadIdx.x; x < Bm; x += blockDim.x) {  // 在 x 方向，每次跨度为 blockDim.x
+      int r = r0 + x;
+      if (r < M) { B[c * M + r] = tile[x][x ^ y]; }  // 将 tile[x][x ^ y] 写入 B[c0 + y, r0 + x]
     }
   }
 }
@@ -144,19 +208,25 @@ void call_transpose_device(int whichKernel, float* A, float* B, const int M, con
       kernel = transposeNaiveColNelements<32, 32>;
       kernelName = "transposeNaiveColNelements";
       block = dim3(blockDimX, 256 / blockDimX);
-      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+      grid = dim3(CEIL(M, 32), CEIL(N, 32));
       break;
     case 3:
-      kernel = transposeShared<48, 32>;
+      kernel = transposeShared<Bm, Bn>;
       kernelName = "transposeShared";
-      block = dim3(32, 8);
-      grid = dim3(CEIL(N, 32), CEIL(M, 32));
+      block = dim3(blockDimX, 256 / blockDimX);
+      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
       break;
     case 4:
-      kernel = transposeSharedNoBankConfilictsV1<48, 32>;
-      kernelName = "transposeSharedNoBankConfilictsV1";
-      block = dim3(32, 8);
-      grid = dim3(CEIL(N, 32), CEIL(M, 32));
+      kernel = transposeSharedPadding<Bm, Bn>;
+      kernelName = "transposeSharedPadding";
+      block = dim3(blockDimX, 256 / blockDimX);
+      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+      break;
+    case 5:
+      kernel = transposeSharedSwizzling<Bm, Bn>;
+      kernelName = "transposeSharedSwizzling";
+      block = dim3(blockDimX, 256 / blockDimX);
+      grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
       break;
     default: break;
   }
