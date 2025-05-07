@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
   cmdline::parser args;
-  args.add<int>("kernel", 'k', "which kernel", true, 0, cmdline::range(0, 5));
+  args.add<int>("kernel", 'k', "which kernel", true, 0, cmdline::range(0, 8));
   args.add<int>("height", 'h', "heigth of matrix", false, 32 * 300);
   args.add<int>("width", 'w', "width of matrix", false, 32 * 300);
   args.add<int>("blockX", 'x', "blockDim.x", false, 16);

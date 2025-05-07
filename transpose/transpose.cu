@@ -143,7 +143,7 @@ __global__ void transposeSharedSwizzling(float* A, float* B, const int M, const 
 
   // thread y 方向负责：矩阵 A 的行，shared memory 的行
   // thread x 方向负责：矩阵 A 的列，shared memory 的列
-  // shared memory 中的元素 tile[y][x] = A[r0 + y, c0 + x]
+  // shared memory 中的元素 tile[y][x ^ y] = A[r0 + y, c0 + x]
 #pragma unroll
   for (int y = threadIdx.y; y < Bm; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
     int r = r0 + y;
@@ -164,7 +164,7 @@ __global__ void transposeSharedSwizzling(float* A, float* B, const int M, const 
 // (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
 // thread y 方向负责：矩阵 B 的行，shared memory 的列
 // thread x 方向负责：矩阵 B 的列，shared memory 的行
-// shared memory 中的元素 tile[x][y] = B[c0 + y, r0 + x]
+// shared memory 中的元素 tile[x][x ^ y] = B[c0 + y, r0 + x]
 #pragma unroll
   for (int y = threadIdx.y; y < Bn; y += blockDim.y) {  // 在 y 方向，每次跨度为 blockDim.y
     int c = c0 + y;
@@ -176,6 +176,180 @@ __global__ void transposeSharedSwizzling(float* A, float* B, const int M, const 
       if (r < M) { B[c * M + r] = tile[x][x ^ y]; }  // 将 tile[x][x ^ y] 写入 B[c0 + y, r0 + x]
     }
   }
+}
+
+__global__ void transposeSharedUnroll(float* A, float* B, const int M, const int N) {
+  __shared__ float tile[32][32];
+
+  /* -------- 读取阶段 -------- */
+  // (r0, c0) 表示 tile 内左上角元素在 matrixA 中的坐标
+  int r0 = blockIdx.y * 32;
+  int c0 = blockIdx.x * 32;
+
+  // thread y 方向负责：矩阵 A 的行，shared memory 的行
+  // thread x 方向负责：矩阵 A 的列，shared memory 的列
+  // shared memory 中的元素 tile[y][x] = A[r0 + y, c0 + x]
+
+  int y = threadIdx.y;
+  int r = r0 + y;
+  int c = c0 + threadIdx.x;
+  if (c >= N) return;
+
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  __syncthreads();  // 同步线程块
+
+  /* -------- 写入阶段 -------- */
+  // (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
+  // thread y 方向负责：矩阵 B 的行，shared memory 的列
+  // thread x 方向负责：矩阵 B 的列，shared memory 的行
+  // shared memory 中的元素 tile[x][y] = B[c0 + y, r0 + x]
+  r = r0 + threadIdx.x;
+  if (r >= M) return;
+
+  y = threadIdx.y;
+  c = c0 + y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+}
+
+__global__ void transposeSharedPaddingUnroll(float* A, float* B, const int M, const int N) {
+  __shared__ float tile[32][33];  // padding
+
+  /* -------- 读取阶段 -------- */
+  // (r0, c0) 表示 tile 内左上角元素在 matrixA 中的坐标
+  int r0 = blockIdx.y * 32;
+  int c0 = blockIdx.x * 32;
+
+  // thread y 方向负责：矩阵 A 的行，shared memory 的行
+  // thread x 方向负责：矩阵 A 的列，shared memory 的列
+  // shared memory 中的元素 tile[y][x] = A[r0 + y, c0 + x]
+
+  int y = threadIdx.y;
+  int r = r0 + y;
+  int c = c0 + threadIdx.x;
+  if (c >= N) return;
+
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x] = A[r * N + c]; }
+
+  __syncthreads();  // 同步线程块
+
+  /* -------- 写入阶段 -------- */
+  // (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
+  // thread y 方向负责：矩阵 B 的行，shared memory 的列
+  // thread x 方向负责：矩阵 B 的列，shared memory 的行
+  // shared memory 中的元素 tile[x][y] = B[c0 + y, r0 + x]
+  r = r0 + threadIdx.x;
+  if (r >= M) return;
+
+  y = threadIdx.y;
+  c = c0 + y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][y]; }
+}
+
+__global__ void transposeSharedSwizzlingUnroll(float* A, float* B, const int M, const int N) {
+  __shared__ float tile[32][32];
+
+  /* -------- 读取阶段 -------- */
+  // (r0, c0) 表示 tile 内左上角元素在 matrixA 中的坐标
+  int r0 = blockIdx.y * 32;
+  int c0 = blockIdx.x * 32;
+
+  // thread y 方向负责：矩阵 A 的行，shared memory 的行
+  // thread x 方向负责：矩阵 A 的列，shared memory 的列
+  // shared memory 中的元素 tile[y][x^y] = A[r0 + y, c0 + x]
+
+  int y = threadIdx.y;
+  int r = r0 + y;
+  int c = c0 + threadIdx.x;
+  if (c >= N) return;
+
+  if (r < M) { tile[y][threadIdx.x ^ y] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x ^ y] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x ^ y] = A[r * N + c]; }
+
+  y += blockDim.y;
+  r += blockDim.y;
+  if (r < M) { tile[y][threadIdx.x ^ y] = A[r * N + c]; }
+
+  __syncthreads();  // 同步线程块
+
+  /* -------- 写入阶段 -------- */
+  // (c0, r0) 表示 tile 内左上角元素在 matrixB 中的坐标
+  // thread y 方向负责：矩阵 B 的行，shared memory 的列
+  // thread x 方向负责：矩阵 B 的列，shared memory 的行
+  // shared memory 中的元素 tile[x][x^y] = B[c0 + y, r0 + x]
+  r = r0 + threadIdx.x;
+  if (r >= M) return;
+
+  y = threadIdx.y;
+  c = c0 + y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][threadIdx.x ^ y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][threadIdx.x ^ y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][threadIdx.x ^ y]; }
+
+  y += blockDim.y;
+  c += blockDim.y;
+  if (c < N) { B[c * M + r] = tile[threadIdx.x][threadIdx.x ^ y]; }
 }
 
 void call_transpose_host(float* A, float* B, const int M, const int N) {
@@ -227,6 +401,24 @@ void call_transpose_device(int whichKernel, float* A, float* B, const int M, con
       kernelName = "transposeSharedSwizzling";
       block = dim3(blockDimX, 256 / blockDimX);
       grid = dim3(CEIL(N, Bn), CEIL(M, Bm));
+      break;
+    case 6:
+      kernel = transposeSharedUnroll;
+      kernelName = "transposeSharedUnroll";
+      block = dim3(32, 8);
+      grid = dim3(CEIL(N, 32), CEIL(M, 32));
+      break;
+    case 7:
+      kernel = transposeSharedPaddingUnroll;
+      kernelName = "transposeSharedPaddingUnroll";
+      block = dim3(32, 8);
+      grid = dim3(CEIL(N, 32), CEIL(M, 32));
+      break;
+    case 8:
+      kernel = transposeSharedSwizzlingUnroll;
+      kernelName = "transposeSharedSwizzlingUnroll";
+      block = dim3(32, 8);
+      grid = dim3(CEIL(N, 32), CEIL(M, 32));
       break;
     default: break;
   }
