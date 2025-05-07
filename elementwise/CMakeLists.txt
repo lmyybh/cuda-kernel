@@ -6,7 +6,7 @@ find_package(CUDAToolkit REQUIRED)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(CMAKE_CUDA_ARCHITECTURES 80 86 87 89 90 100 101 120)
+set(CMAKE_CUDA_ARCHITECTURES OFF)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
 
 include_directories(../common ../thirdparty)
