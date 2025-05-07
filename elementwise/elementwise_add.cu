@@ -68,30 +68,31 @@ void call_add_f32_host(float* A, float* B, float* C, const int N) {
 }
 
 // kernel 调用
-void call_add_f32_device(int whichKernel, int blockSize, float* d_A, float* d_B, float* d_C,
-                         const int N) {
+void call_add_f32_device(int whichKernel, int blockSize, int gridSize, float* d_A, float* d_B,
+                         float* d_C, const int N) {
   void (*kernel)(float*, float*, float*, const int);
   const char* kernelName = "";
-  int gridSize = (N + blockSize - 1) / blockSize;
 
   switch (whichKernel) {
     case 0:
       kernel = elementwise_add;
       kernelName = "elementwise_add";
+      gridSize = (N + blockSize - 1) / blockSize;
       break;
     case 1:
       kernel = elementwise_add_gsl;
       kernelName = "elementwise_add_gsl";
+      if (gridSize <= 0) { gridSize = (N + blockSize - 1) / blockSize; }
       break;
     case 2:
-      gridSize = (N + blockSize * 4 - 1) / (blockSize * 4);
       kernel = elementwise_add_vec4;
       kernelName = "elementwise_add_vec4";
+      gridSize = (N + blockSize * 4 - 1) / (blockSize * 4);
       break;
     case 3:
-      gridSize = (N + blockSize * 4 - 1) / (blockSize * 4);
       kernel = elementwise_add_vec4_gsl;
       kernelName = "elementwise_add_vec4_gsl";
+      if (gridSize <= 0) { gridSize = (N + blockSize * 4 - 1) / (blockSize * 4); }
       break;
     default: break;
   }

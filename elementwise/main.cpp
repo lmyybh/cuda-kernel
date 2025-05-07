@@ -1,42 +1,29 @@
 #include <cuda_runtime.h>
-#include <algorithm>
-
+#include "cmdline.h"
 #include "elementwise.h"
 #include "helper_cuda.cuh"
 #include "helper_data.h"
 
-int clip(int value, int amin, int amax) { return std::max(std::min(value, amax), amin); }
-
 int main(int argc, char* argv[]) {
   // 运行示例: elementwise whichKernel blockSize N devID
+  cmdline::parser args;
+  args.add<int>("kernel", 'k', "which kernel", true, 0, cmdline::range(0, 3));
+  args.add<int>("N", 'n', "number of elements", false, 16 * 1024 * 1024);
+  args.add<int>("block", 'b', "block size", false, 256);
+  args.add<int>("grid", 'g', "grid size", false, 0);
+  args.add<int>("device", 'd', "gpu id", false, 0);
+  args.parse_check(argc, argv);
 
-  // 定义默认值
-  int whichKernel = 0;
-  int blockSize = 256;
-  int N = 16 * 1024 * 1024;
-  int devID = 0;
-
-  // 处理输入参数
-  for (int i = 1; i < argc; ++i) {
-    if (i == 1) {
-      whichKernel = clip(atoi(argv[i]), 0, 3);
-    } else if (i == 2) {
-      blockSize = clip(atoi(argv[i]), 64, 1024);
-    } else if (i == 3) {
-      N = clip(atoi(argv[i]), 1, 16 * 1024 * 1024);
-    } else if (i == 4) {
-      devID = atoi(argv[i]);
-    }
-  }
+  const int N = args.get<int>("N");
+  const int nbytes = N * sizeof(float);
 
   // 获取设备信息
+  int devID = args.get<int>("device");
   cudaDeviceProp deviceProps;
   checkCudaErrors(cudaGetDeviceProperties(&deviceProps, devID));
   printf("CUDA device [%d]: [%s]\n", devID, deviceProps.name);
 
   // 初始化 host 数据
-  int nbytes = N * sizeof(float);
-
   float* A = nullptr;
   checkCudaErrors(cudaMallocHost((void**)&A, nbytes));
   initialRangeData(A, N, 0.0f, 0.01f);
@@ -66,7 +53,8 @@ int main(int argc, char* argv[]) {
   call_add_f32_host(A, B, C, N);
 
   // 调用 device
-  call_add_f32_device(whichKernel, blockSize, d_A, d_B, d_C, N);
+  call_add_f32_device(args.get<int>("kernel"), args.get<int>("block"), args.get<int>("grid"), d_A,
+                      d_B, d_C, N);
   getLastCudaError("call_add_f32_device failed\n");
   cudaDeviceSynchronize();
 
