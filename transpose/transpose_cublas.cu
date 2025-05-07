@@ -44,9 +44,11 @@ int main(int argc, char* argv[]) {
   checkCudaErrors(cudaMallocHost((void**)&gpuB, nBytes));
   checkCudaErrors(cudaMemcpy(gpuB, d_B, nBytes, cudaMemcpyDeviceToHost));
 
-  //   print2D<float>(A_colmajor, N, M);
-  //   printf("-------------------------\n");
-  //   print2D<float>(gpuB, M, N);
+  if (checkResult(A, gpuB, M * N)) {
+    printf("success\n");
+  } else {
+    printf("error\n");
+  }
 
   checkCudaErrors(cudaFreeHost(A));
   checkCudaErrors(cudaFreeHost(A_colmajor));
