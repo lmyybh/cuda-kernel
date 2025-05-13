@@ -5,9 +5,18 @@
 #include <string.h>
 #include <iostream>
 #include <string>
+#include <random>
 
 void initialRangeData(float* p, const int size, float start, float step) {
   for (int i = 0; i < size; ++i) { p[i] = start + step * i; }
+}
+
+void normalInitialData(float* p, const int size, unsigned int seed = 0, float mean = 0.0f,
+                       float std = 1.0f) {
+  std::default_random_engine generator(seed);
+  std::normal_distribution<float> dist(mean, std);
+
+  for (int i = 0; i < size; ++i) { p[i] = dist(generator); }
 }
 
 bool checkResult(float* hostRef, float* gpuRef, const int N) {
@@ -21,6 +30,12 @@ bool checkResult(float* hostRef, float* gpuRef, const int N) {
   }
 
   return match;
+}
+
+template<typename T>
+void print1D(T* data, const int N) {
+  for (int i = 0; i < N; ++i) { std::cout << data[i] << ","; }
+  std::cout << std::endl;
 }
 
 template<typename T>
