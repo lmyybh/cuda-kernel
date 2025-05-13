@@ -17,3 +17,4 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
 
 add_subdirectory(elementwise)
 add_subdirectory(transpose)
+add_subdirectory(reduction)
