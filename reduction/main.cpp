@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
   cmdline::parser args;
-  args.add<int>("kernel", 'k', "which kernel", true, 0, cmdline::range(-1, 7));
+  args.add<int>("kernel", 'k', "which kernel", true, 0, cmdline::range(-2, 7));
   args.add<int>("N", 'n', "number of elements", false, 16 * 1024 * 1024);
   args.add<unsigned int>("seed", 's', "random seed", false, 0);
   args.add<int>("device", 'd', "gpu id", false, 0);
