@@ -14,11 +14,11 @@
 
 知乎文章：[CUDA element-wise 算子详解](https://zhuanlan.zhihu.com/p/1888630735520391519)
 
-> GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9)
-> 
-> CUDA: 12.8
-> 
-> N: 16 * 1024 * 1024
+**性能测试**
+
+- GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9)
+- CUDA: 12.8
+- N: 16 * 1024 * 1024
 
 |              | <grid_size, block_size> | Memory Throughput (Gbytes/s) | Times(us) |
 | ------------ | ----------------------- | ---------------------------- | --------- |
@@ -30,11 +30,11 @@
 
 知乎文章：[CUDA transpose 算子详解](https://zhuanlan.zhihu.com/p/1899760505733756129)
 
-> GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9)
-> 
-> CUDA: 12.8
-> 
-> 矩阵尺寸：M = N = 9600
+**性能测试 1**
+
+- GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9)
+- CUDA: 12.8 
+- 矩阵尺寸：M = N = 9600
 
  |                               | block size | duration (ms) |
  | ----------------------------- | ---------- | ------------- |
@@ -52,12 +52,11 @@
  | SharedSwizzlingUnroll<32, 32> | (32, 8)    | 3.01          |
  | cuBLAS                        |            | 3.01          |
 
+**性能测试 2**
 
-> GPU：NVIDIA GeForce GTX 960M (Compute Capability 5.0)
-> 
-> CUDA: 12.1
-> 
-> 矩阵尺寸：M = N = 9600
+- GPU：NVIDIA GeForce GTX 960M (Compute Capability 5.0)
+- CUDA: 12.1 
+- 矩阵尺寸：M = N = 9600
 
  |                               | block size | duration (ms) |
  | ----------------------------- | ---------- | ------------- |
@@ -78,11 +77,11 @@
 
 知乎文章：[CUDA reduce 算子详解](https://zhuanlan.zhihu.com/p/1905661893739283464)
 
-> GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9)
-> 
-> CUDA: 12.8
-> 
-> N: 16 * 1024 * 1024
+**性能测试**
+
+- GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9) 
+- CUDA: 12.8 
+- N: 16 * 1024 * 1024
 
 |              | block size | elements per block | duration (us) | memeory throughput % |
 | ------------ | ---------- | ------------------ | ------------- | -------------------- |
