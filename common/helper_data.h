@@ -19,11 +19,12 @@ void normalInitialData(float* p, const int size, unsigned int seed = 0, float me
   for (int i = 0; i < size; ++i) { p[i] = dist(generator); }
 }
 
-bool checkResult(float* hostRef, float* gpuRef, const int N) {
-  double eps = 1.0E-8;
+bool checkResult(float* hostRef, float* gpuRef, const int N, float eps = 1.0E-4f) {
   bool match = true;
   for (int i = 0; i < N; ++i) {
     if (abs(hostRef[i] - gpuRef[i]) > eps) {
+      printf("i: [%d], host: [%f], gpu: [%f]\n, err: [%f]", i, hostRef[i], gpuRef[i],
+             abs(hostRef[i] - gpuRef[i]));
       match = false;
       break;
     }

@@ -4,7 +4,7 @@
 - [x] transpose
 - [x] reduction
 - [ ] GEMV
-- [ ] SGEMM
+- [x] SGEMM
 - [ ] convolution
 - [ ] flash attention
 
@@ -95,3 +95,26 @@
 | reduce6      | 256        | 256 * 4            | 251.52        | 96.89                |
 | reduce6_vec4 | 256        | 256 * 4            | 251.39        | 96.89                |
 | reduce7      | 256        | 256 * 4            | 251.74        | 96.79                |
+
+## 4. GEMM
+
+知乎文章：[CUDA GEMM 算子详解](https://zhuanlan.zhihu.com/p/1910636263666610461)
+
+**性能测试**
+
+- GPU：NVDIA GeForce RTX 4060 Ti (Compute Capability 8.9) 
+- CUDA: 12.8 
+- 矩阵尺寸: M = N = K = 2048
+
+|                     | Time (ms) | 相对效率 |
+| ------------------- | --------- | -------- |
+| cublasSgemm         | 1.44      | 100%     |
+| naiveGEMM           | 13.85     | 10.4%    |
+| blockTileGEMM       | 2.86      | 50.3%    |
+| threadTileGEMM      | 2.85      | 50.5%    |
+| warpGEMM            | 2.83      | 50.9%    |
+| float4GEMM          | 2.39      | 60.3%    |
+| float4GEMMnoBC      | 2.50      | 57.6%    |
+| zorderGEMM          | 2.45      | 58.8%    |
+| optimGEMM           | 1.55      | 92.9%    |
+| doublebufferingGEMM | 1.49      | 96.6%    |

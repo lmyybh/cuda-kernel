@@ -1,0 +1,5 @@
+add_executable(l2cache_bandwidth l2cache_bandwidth.cu)
+target_compile_options(l2cache_bandwidth PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>)
+target_compile_features(l2cache_bandwidth PRIVATE cxx_std_17 cuda_std_17)
+set_target_properties(l2cache_bandwidth PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_include_directories(l2cache_bandwidth PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
